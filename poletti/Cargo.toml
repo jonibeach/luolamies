@@ -1,0 +1,21 @@
+[package]
+name = "poletti"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+pyo3 = { version = "0.29", features = ["anyhow"] }
+rayon = "1.12.0"
+parquet = "*"   
+arrow = "*"
+anyhow = "1"
+fancy-regex = "0.19.2"
+rustc-hash = "2.1.3"
+pyo3-stub-gen = "0.23.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "stub_gen"
+path = "scripts/stub_gen.rs"

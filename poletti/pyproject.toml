@@ -1,0 +1,22 @@
+[project]
+name = "poletti"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.14"
+dependencies = []
+
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "build_backend"
+backend-path = ["scripts"]
+
+
+[tool.maturin]
+module-name = "poletti"
+features = ["pyo3/extension-module"]
+
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "Cargo.toml" }, { file = "**/*.rs" }]
+
+[dependency-groups]
+dev = ["maturin"]

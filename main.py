@@ -1,8 +1,10 @@
 from preprocess import preprocess
+from bpe import bpe
 
 
 def main():
-    preprocess()
+    corpus = preprocess()
+    bpe(str(corpus.absolute()))
 
 
 if __name__ == "__main__":
