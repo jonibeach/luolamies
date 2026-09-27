@@ -4,7 +4,7 @@ import maturin
 
 
 def gen():
-    subprocess.run(["cargo", "run", "--bin", "stub_gen"], check=True)
+    subprocess.run(["cargo", "run", "--release", "--bin", "stub_gen"], check=True)
 
 
 def build_wheel(*args, **kwargs):
