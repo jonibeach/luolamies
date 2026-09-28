@@ -1,6 +1,7 @@
 import subprocess
-from maturin import *
+
 import maturin
+from maturin import *
 
 
 def gen():

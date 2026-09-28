@@ -1,7 +1,6 @@
+import bz2
+import re
 from collections.abc import Callable
-from mwparserfromhell.nodes import Node
-from mwparserfromhell.wikicode import Wikicode
-import bz2, re
 from concurrent.futures import ProcessPoolExecutor
 from itertools import batched
 from pathlib import Path
@@ -10,6 +9,8 @@ import mwparserfromhell as mw
 import pyarrow as pa
 import pyarrow.parquet as pq
 from lxml import etree
+from mwparserfromhell.nodes import Node
+from mwparserfromhell.wikicode import Wikicode
 
 REMOVE_TAGS = ("ref", "table", "noinclude")
 UNWRAP_TEMPLATES = re.compile(r"^(k-\w+|lang(-\w+)?|ipa)$", re.IGNORECASE)

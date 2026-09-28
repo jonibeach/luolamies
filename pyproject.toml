@@ -9,7 +9,8 @@ dependencies = [
     "mwparserfromhell>=0.7.2",
     "pyarrow>=25.0.1",
     "torch>=2.14.0",
-    "poletti"
+    "poletti",
+    "numpy>=2.5.3",
 ]
 
 [tool.uv.sources]
