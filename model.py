@@ -8,6 +8,10 @@ from itertools import pairwise
 DEVICE = "cuda" if torch.cuda.is_available() else "mps"
 # Dataset is ish 250M tokens, so 250/20 is around 12M, so lets do 12 layers with ~1M each so D_MODEL=256
 D_MODEL = 2**8
+NUM_HEADS = 8
+assert D_MODEL % NUM_HEADS == 0
+D_HEAD = D_MODEL // NUM_HEADS
+
 NUM_LAYERS = 12
 HIDDEN_MUL = 4
 
@@ -59,26 +63,32 @@ class MLP(nn.Module):
 class Attn(nn.Module):
     def __init__(self):
         super().__init__()
-        self.WK, self.WQ, self.WV = p(), p(), p()
+        self.WK, self.WQ, self.WV, self.WO = p(), p(), p(), p()
 
     def forward(self, input: torch.Tensor):
-        _, T, D = input.shape
+        B, T, D = input.shape
         assert D == D_MODEL
 
-        K = input @ self.WK  # B, T, D
-        Q = input @ self.WQ  # B, T, D
-        V = input @ self.WV  # B, T, D
-        K_T = K.transpose(2, 1)  # B, D, T
+        C = input @ torch.cat([self.WK, self.WQ, self.WV], dim=1)  # B, T, 3D
+        C = C.reshape(B, T, 3, NUM_HEADS, D_HEAD)
+        C = C.permute(2, 0, 3, 1, 4)  # 3, B, H, T, D_h
+        K, Q, V = C.unbind(0)  # each B, H, T, D_h
 
-        OUT = Q @ K_T  # B, T, T
+        K_T = K.transpose(3, 2)  # B, H, D_h, T
 
-        temporal_mask = (torch.arange(T)[:, None] < torch.arange(T)[None, :]).to(
-            DEVICE
+        OUT = Q @ K_T  # B, H, T, T
+
+        temporal_mask = (
+            torch.arange(T, device=input.device)[:, None]
+            < torch.arange(T, device=input.device)[None, :]
         )  # T,T
         OUT = OUT.masked_fill(temporal_mask, float("-inf"))
 
-        OUT = torch.softmax(OUT / D_MODEL**0.5, dim=-1)  # B, T, T
-        OUT = OUT @ V  # B, T, D
+        OUT = torch.softmax(OUT / D_HEAD**0.5, dim=-1)  # B, H, T, T
+        OUT = OUT @ V  # B, H, T, D_h
+        OUT = OUT.transpose(1, 2)  # B, T, H, D_h
+        OUT = OUT.reshape(B, T, D)  # B, T, D
+        OUT = OUT @ self.WO  # B, T, D
 
         return OUT
 
