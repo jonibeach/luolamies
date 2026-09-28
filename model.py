@@ -16,8 +16,29 @@ NUM_LAYERS = 12
 HIDDEN_MUL = 4
 
 
-def p(a=D_MODEL, b=D_MODEL):
-    return nn.Parameter(torch.randn(a, b) * a**-0.5)
+def p(a=D_MODEL, b=D_MODEL, s: float | None = None):
+    s = s if s is not None else a**-0.5
+    return nn.Parameter(torch.randn(a, b) * s)
+
+
+class RoPE(nn.Module):
+    def __init__(self, b: float = 1e4):
+        super().__init__()
+        self.b = b
+        freqs = self.b ** (
+            -torch.arange(0, D_HEAD, step=2, device=DEVICE) / D_HEAD
+        )  # theta = b^-2i/D_m. D_h/2
+        self.register_buffer("freqs", freqs, persistent=False)
+
+    def forward(self, input: torch.Tensor):
+        *_, T, _ = input.shape
+        first, second = input.chunk(2, dim=-1)  # each B, H, T, D_h/2
+        half_rotated = torch.cat((-second, first), dim=-1)  # B, H, T, D_h
+        i = torch.arange(T, device=input.device)[:, None]  # T, 1
+        angles = i * self.freqs  # m*theta. T, D_h/2
+        angles = torch.cat((angles, angles), dim=1)  # T, D_h
+
+        return input * angles.cos() + half_rotated * angles.sin()
 
 
 class LayerNorm(nn.Module):
@@ -64,6 +85,7 @@ class Attn(nn.Module):
     def __init__(self):
         super().__init__()
         self.WK, self.WQ, self.WV, self.WO = p(), p(), p(), p()
+        self.rope = RoPE()
 
     def forward(self, input: torch.Tensor):
         B, T, D = input.shape
@@ -73,6 +95,7 @@ class Attn(nn.Module):
         C = C.reshape(B, T, 3, NUM_HEADS, D_HEAD)
         C = C.permute(2, 0, 3, 1, 4)  # 3, B, H, T, D_h
         K, Q, V = C.unbind(0)  # each B, H, T, D_h
+        K, Q = self.rope(K), self.rope(Q)
 
         K_T = K.transpose(3, 2)  # B, H, D_h, T
 
@@ -110,11 +133,13 @@ class AttnBlock(nn.Module):
 class Model(nn.Module):
     def __init__(self):
         super().__init__()
+        self.emb = p(VOCAB_SIZE, D_MODEL, 2e-2)
         self.attn_blocks = nn.ModuleList(AttnBlock() for _ in range(NUM_LAYERS))
         self.proj = Lin(D_MODEL, VOCAB_SIZE)
         self.final_ln = LayerNorm()
 
     def forward(self, input):
+        input = self.emb[input]
         res = input
         for l in self.attn_blocks:
             res = l(res)
