@@ -6,7 +6,7 @@ use pyo3_stub_gen::derive::gen_stub_pyfunction;
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::util::{Token, rowgroup_pretokens_foreach};
+use crate::util::{Pretoken, Token, rowgroup_pretokens_foreach};
 
 type PairCounts = FxHashMap<(Token, Token), (usize, FxHashSet<usize>)>;
 pub(crate) const BASE_TOKEN: Token = u8::MAX as Token + 1;
@@ -31,11 +31,14 @@ fn count(
 ) -> anyhow::Result<FxHashMap<Vec<u8>, usize>> {
     let mut counts = FxHashMap::default();
 
-    rowgroup_pretokens_foreach(parquet_path, meta, i, |bytes| match counts.get_mut(bytes) {
-        Some(c) => *c += 1,
-        None => {
-            counts.insert(bytes.to_vec(), 1);
-        }
+    rowgroup_pretokens_foreach(parquet_path, meta, i, |bytes| match bytes {
+        Pretoken::Regular(bytes) => match counts.get_mut(bytes) {
+            Some(c) => *c += 1,
+            None => {
+                counts.insert(bytes.to_vec(), 1);
+            }
+        },
+        Pretoken::EndOfText => {}
     })?;
 
     Ok(counts)
@@ -165,7 +168,7 @@ pub(crate) fn words(counts: FxHashMap<Vec<u8>, usize>) -> Vec<(Vec<Token>, usize
 pub(crate) fn train_bpe(
     py: Python<'_>,
     parquet_path: &str,
-    num_merges: usize,
+    vocab_size: u16,
 ) -> anyhow::Result<Vec<(Token, Token)>> {
     py.detach(|| {
         let counts = count_pretokenized(parquet_path)?;
@@ -174,13 +177,12 @@ pub(crate) fn train_bpe(
         let mut pair_counts = build_pair_counts(&words);
         let mut pair_ranks = BinaryHeap::new();
         let mut merges = Vec::new();
-        let mut next_id = BASE_TOKEN;
 
         for (ids, (count, _)) in &pair_counts {
             pair_ranks.push((*count, *ids));
         }
 
-        for _ in 0..num_merges {
+        for next_id in BASE_TOKEN..vocab_size - 1 {
             let argmax = loop {
                 let Some((count, ids)) = pair_ranks.pop() else {
                     break None;
@@ -215,7 +217,6 @@ pub(crate) fn train_bpe(
             }
 
             merges.push(ids);
-            next_id += 1;
         }
 
         Ok(merges)

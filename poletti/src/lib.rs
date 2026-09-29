@@ -12,6 +12,7 @@ use train::train_bpe;
 fn poletti(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(train_bpe, m)?)?;
     m.add_function(wrap_pyfunction!(encode_corpus, m)?)?;
+
     Ok(())
 }
 

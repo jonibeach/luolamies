@@ -8,7 +8,7 @@ use crate::{
     train::{
         BASE_TOKEN, apply_merge, build_pair_counts, count_pretokenized, iter_row_groups, word,
     },
-    util::{Token, rowgroup_pretokens_foreach},
+    util::{Pretoken, Token, rowgroup_pretokens_foreach},
 };
 
 fn encode(words: &mut [(Vec<Token>, usize)], merge_table: &[(Token, Token)]) {
@@ -37,8 +37,9 @@ pub(crate) fn encode_corpus<'py>(
     py: Python<'py>,
     parquet_path: &str,
     merge_table: Vec<(Token, Token)>,
-) -> anyhow::Result<(PyArr1<'py, u64>, PyArr1<'py, Token>)> {
-    let (starts, tokens) = py.detach(|| -> anyhow::Result<_> {
+    vocab_size: u16,
+) -> anyhow::Result<PyArr1<'py, Token>> {
+    let tokens = py.detach(|| -> anyhow::Result<_> {
         let counts = count_pretokenized(parquet_path)?;
 
         let (keys, mut words): (Vec<_>, Vec<_>) = counts
@@ -60,28 +61,18 @@ pub(crate) fn encode_corpus<'py>(
 
         let tokens = iter_row_groups(parquet_path, |i, meta| -> anyhow::Result<_> {
             let mut tokens = Vec::new();
-            rowgroup_pretokens_foreach(parquet_path, meta, i, |pt| {
-                tokens.extend_from_slice(&byte_token_kv[pt])
+            rowgroup_pretokens_foreach(parquet_path, meta, i, |pt| match pt {
+                Pretoken::Regular(pt) => tokens.extend_from_slice(&byte_token_kv[pt]),
+                Pretoken::EndOfText => tokens.push(vocab_size - 1),
             })?;
             Ok(tokens)
         })?
         .collect::<anyhow::Result<Vec<_>>>()?;
 
-        let starts = tokens
-            .iter()
-            .scan(0u64, |acc, article_tokens| {
-                *acc += article_tokens.len() as u64;
-                Some(*acc)
-            })
-            .collect();
-
         let tokens = tokens.into_iter().flatten().collect();
 
-        Ok((starts, tokens))
+        Ok(tokens)
     })?;
 
-    Ok((
-        PyArray1::from_vec(py, starts),
-        PyArray1::from_vec(py, tokens),
-    ))
+    Ok(PyArray1::from_vec(py, tokens))
 }

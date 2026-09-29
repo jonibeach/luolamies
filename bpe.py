@@ -4,13 +4,12 @@ from pathlib import Path
 import poletti
 
 VOCAB_SIZE = 2**15
-MERGES = VOCAB_SIZE - 2**8
 
 
 def bpe(corpus_path):
     bpe_path = Path("./data/tokenizer.json")
     if not bpe_path.exists():
-        merges = poletti.train_bpe(corpus_path, MERGES)
+        merges = poletti.train_bpe(corpus_path, VOCAB_SIZE)
         with open(bpe_path, "w") as file:
             file.write(json.dumps(merges))
     else:

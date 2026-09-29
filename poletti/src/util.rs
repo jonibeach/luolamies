@@ -10,11 +10,16 @@ pub type Token = u16;
 
 thread_local! { static RE: Regex = Regex::new(PAT).unwrap();}
 
+pub(crate) enum Pretoken<'a> {
+    Regular(&'a [u8]),
+    EndOfText,
+}
+
 pub(crate) fn rowgroup_pretokens_foreach(
     parquet_path: &str,
     meta: ArrowReaderMetadata,
     i: usize,
-    mut cb: impl FnMut(&[u8]),
+    mut cb: impl for<'a> FnMut(Pretoken<'a>),
 ) -> anyhow::Result<()> {
     RE.with(|re| {
         let file = File::open(parquet_path)?;
@@ -35,8 +40,10 @@ pub(crate) fn rowgroup_pretokens_foreach(
                 let pretokens = re.find_iter(text);
                 for pretoken in pretokens {
                     let bytes = pretoken?.as_str().as_bytes();
-                    cb(bytes)
+                    cb(Pretoken::Regular(bytes))
                 }
+
+                cb(Pretoken::EndOfText)
             }
         }
 

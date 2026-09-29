@@ -1,4 +1,4 @@
-from bpe import bpe
+from bpe import bpe, VOCAB_SIZE
 import poletti
 import model
 
@@ -9,9 +9,9 @@ def main():
     corpus = preprocess()
     p = str(corpus.absolute())
     merges = bpe(p)
-    starts, tokenized_corpus = poletti.encode_corpus(p, merges)
+    tokenized_corpus = poletti.encode_corpus(p, merges, VOCAB_SIZE)
     print(len(tokenized_corpus))
-    model.train(tokenized_corpus, starts)
+    model.train(tokenized_corpus)
 
 
 if __name__ == "__main__":
