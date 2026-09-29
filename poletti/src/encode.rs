@@ -29,14 +29,16 @@ fn encode(words: &mut [(Vec<Token>, usize)], merge_table: &[(Token, Token)]) {
     }
 }
 
+type PyArr1<'py, T> = Bound<'py, PyArray1<T>>;
+
 #[gen_stub_pyfunction]
 #[pyfunction]
 pub(crate) fn encode_corpus<'py>(
     py: Python<'py>,
     parquet_path: &str,
     merge_table: Vec<(Token, Token)>,
-) -> anyhow::Result<Bound<'py, PyArray1<Token>>> {
-    let tokens = py.detach(|| -> anyhow::Result<Vec<Token>> {
+) -> anyhow::Result<(PyArr1<'py, u64>, PyArr1<'py, Token>)> {
+    let (starts, tokens) = py.detach(|| -> anyhow::Result<_> {
         let counts = count_pretokenized(parquet_path)?;
 
         let (keys, mut words): (Vec<_>, Vec<_>) = counts
@@ -63,11 +65,23 @@ pub(crate) fn encode_corpus<'py>(
             })?;
             Ok(tokens)
         })?
-        .collect::<anyhow::Result<Vec<_>>>()?
-        .concat();
+        .collect::<anyhow::Result<Vec<_>>>()?;
 
-        Ok(tokens)
+        let starts = tokens
+            .iter()
+            .scan(0u64, |acc, article_tokens| {
+                *acc += article_tokens.len() as u64;
+                Some(*acc)
+            })
+            .collect();
+
+        let tokens = tokens.into_iter().flatten().collect();
+
+        Ok((starts, tokens))
     })?;
 
-    Ok(PyArray1::from_vec(py, tokens))
+    Ok((
+        PyArray1::from_vec(py, starts),
+        PyArray1::from_vec(py, tokens),
+    ))
 }
