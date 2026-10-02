@@ -11,6 +11,7 @@ dependencies = [
     "torch>=2.14.0",
     "poletti",
     "numpy>=2.5.3",
+    "skypilot>=0.13.0",
 ]
 
 [tool.uv.sources]
