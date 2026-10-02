@@ -24,14 +24,8 @@ pub(crate) fn iter_row_groups<T: Send, O: Send + Sync + Fn(usize, ArrowReaderMet
         .map(move |i| op(i, meta.clone())))
 }
 
-fn count(
-    parquet_path: &str,
-    i: usize,
-    meta: ArrowReaderMetadata,
-) -> anyhow::Result<FxHashMap<Vec<u8>, usize>> {
-    let mut counts = FxHashMap::default();
-
-    rowgroup_pretokens_foreach(parquet_path, meta, i, |bytes| match bytes {
+pub(crate) fn handle_count<'a>(counts: &mut FxHashMap<Vec<u8>, usize>, pretoken: Pretoken<'a>) {
+    match pretoken {
         Pretoken::Regular(bytes) => match counts.get_mut(bytes) {
             Some(c) => *c += 1,
             None => {
@@ -39,20 +33,32 @@ fn count(
             }
         },
         Pretoken::EndOfText => {}
-    })?;
+    }
+}
+
+fn count_row_group(
+    parquet_path: &str,
+    i: usize,
+    meta: ArrowReaderMetadata,
+) -> anyhow::Result<FxHashMap<Vec<u8>, usize>> {
+    let mut counts = FxHashMap::default();
+
+    rowgroup_pretokens_foreach(parquet_path, meta, i, |pt| handle_count(&mut counts, pt))?;
 
     Ok(counts)
 }
 
 pub(crate) fn count_pretokenized(parquet_path: &str) -> anyhow::Result<FxHashMap<Vec<u8>, usize>> {
-    let counts = iter_row_groups(parquet_path, |i, meta| count(parquet_path, i, meta))?
-        .try_reduce(FxHashMap::default, |a, b| {
-            let (mut a, b) = if a.len() >= b.len() { (a, b) } else { (b, a) };
-            for (k, v) in b {
-                *a.entry(k).or_insert(0) += v;
-            }
-            Ok(a)
-        })?;
+    let counts = iter_row_groups(parquet_path, |i, meta| {
+        count_row_group(parquet_path, i, meta)
+    })?
+    .try_reduce(FxHashMap::default, |a, b| {
+        let (mut a, b) = if a.len() >= b.len() { (a, b) } else { (b, a) };
+        for (k, v) in b {
+            *a.entry(k).or_insert(0) += v;
+        }
+        Ok(a)
+    })?;
 
     Ok(counts)
 }
