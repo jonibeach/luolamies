@@ -3,7 +3,7 @@ from pathlib import Path
 
 import poletti
 
-VOCAB_SIZE = 2**15
+VOCAB_SIZE = 2**13
 
 
 def bpe(corpus_path):

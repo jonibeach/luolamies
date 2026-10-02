@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from .utils import D_HEAD, D_MODEL, NUM_HEADS, HIDDEN_MUL, p, MLP, LayerNorm
 from .rope import RoPE
+import torch.nn.functional as F
 
 
 class Attn(nn.Module):
@@ -20,18 +21,20 @@ class Attn(nn.Module):
         K, Q, V = C.unbind(0)  # each B, H, T, D_h
         K, Q = self.rope(K), self.rope(Q)
 
-        K_T = K.transpose(3, 2)  # B, H, D_h, T
+        # K_T = K.transpose(3, 2)  # B, H, D_h, T
 
-        OUT = Q @ K_T  # B, H, T, T
+        # OUT = Q @ K_T  # B, H, T, T
 
-        temporal_mask = (
-            torch.arange(T, device=input.device)[:, None]
-            < torch.arange(T, device=input.device)[None, :]
-        )  # T,T
-        OUT = OUT.masked_fill(temporal_mask, float("-inf"))
+        # temporal_mask = (
+        #    torch.arange(T, device=input.device)[:, None]
+        #    < torch.arange(T, device=input.device)[None, :]
+        # )  # T,T
+        # OUT = OUT.masked_fill(temporal_mask, float("-inf"))
 
-        OUT = torch.softmax(OUT / D_HEAD**0.5, dim=-1)  # B, H, T, T
-        OUT = OUT @ V  # B, H, T, D_h
+        # OUT = torch.softmax(OUT / D_HEAD**0.5, dim=-1)  # B, H, T, T
+        # OUT = OUT @ V  # B, H, T, D_h
+
+        OUT = F.scaled_dot_product_attention(Q, K, V, is_causal=True)
         OUT = OUT.transpose(1, 2)  # B, T, H, D_h
         OUT = OUT.reshape(B, T, D)  # B, T, D
         OUT = OUT @ self.WO  # B, T, D

@@ -19,7 +19,3 @@ class Model(nn.Module):
         for l in self.attn_blocks:
             res = l(res)
         return self.proj(self.final_ln(res))
-
-
-BATCH_SIZE = 2**10
-loss = nn.CrossEntropyLoss()
