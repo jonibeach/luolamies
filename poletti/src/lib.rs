@@ -1,18 +1,18 @@
-mod encode;
-mod train;
+mod corpus;
+mod encoder;
+mod pairs;
+mod tokenizer;
 mod util;
 
 use pyo3::prelude::*;
 use pyo3_stub_gen::define_stub_info_gatherer;
 
-use encode::{encode_corpus, encode_text};
-use train::train_bpe;
+use crate::{corpus::Corpus, tokenizer::Tokenizer};
 
 #[pymodule]
 fn poletti(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(train_bpe, m)?)?;
-    m.add_function(wrap_pyfunction!(encode_corpus, m)?)?;
-    m.add_function(wrap_pyfunction!(encode_text, m)?)?;
+    m.add_class::<Tokenizer>()?;
+    m.add_class::<Corpus>()?;
 
     Ok(())
 }
