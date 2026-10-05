@@ -44,7 +44,8 @@ def main():
         model.train(tokenized_corpus)
     else:
         with torch.no_grad():
-            m, *_ = model.restore_or_new()
+            ds = model.dataset(tokenized_corpus)
+            m, *_ = model.restore_or_new(ds.total_steps)
             input = tokenizer.encode_text(args.input)
             output = m(torch.from_numpy(input.astype(np.int32)))
             top10 = torch.topk(output, 10, dim=-1).indices

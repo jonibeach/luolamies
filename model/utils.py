@@ -1,3 +1,5 @@
+from collections.abc import Iterable
+from torch.nn import Parameter
 from itertools import pairwise
 
 import torch
@@ -57,3 +59,18 @@ class MLP(nn.Module):
             res = f(l(res))
 
         return res
+
+
+def norm_squared(t: torch.Tensor):
+    return torch.dot(t.flatten(), t.flatten())
+
+
+def clip_grad_norm(params: Iterable[Parameter], clamp_to=1.0, eps=1e-6):
+    grads = [p.grad for p in params if p.grad is not None]
+    total_grad_norm = torch.stack([norm_squared(g) for g in grads]).sum().sqrt()
+    c = torch.clamp(clamp_to / (total_grad_norm + eps), max=1.0)
+
+    for g in grads:
+        g.mul_(c)
+
+    return total_grad_norm
