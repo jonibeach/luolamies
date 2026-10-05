@@ -1,7 +1,7 @@
-import torch
-from torch import nn
 from itertools import pairwise
 
+import torch
+from torch import nn
 
 DEVICE = "cuda" if torch.cuda.is_available() else "mps"
 # Dataset is ish 250M tokens, so 250/20 is around 12M, so lets do 12 layers with ~1M each so D_MODEL=256

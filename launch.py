@@ -1,9 +1,8 @@
 #!/usr/bin/env -S uvx --from skypilot[gcp]==0.13.0 python
-from enum import StrEnum
-from enum import Enum
+import argparse
 import subprocess
 import sys
-import argparse
+from enum import StrEnum
 from pathlib import Path
 
 import sky

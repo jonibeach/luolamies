@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+
 import torch
 from torch.optim import Optimizer
 

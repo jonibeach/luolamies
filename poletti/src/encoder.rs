@@ -1,5 +1,3 @@
-use numpy::PyArray1;
-use pyo3::Bound;
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 
@@ -8,8 +6,6 @@ use crate::{
     pairs::{Pairs, TokenPair},
     util::{BASE_TOKEN, Token, WordCounts, pretokens},
 };
-
-type PyArr1<'py, T> = Bound<'py, PyArray1<T>>;
 
 pub(crate) struct Encoder {
     kv: FxHashMap<Vec<u8>, Vec<Token>>,

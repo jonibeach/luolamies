@@ -1,4 +1,4 @@
-use std::{fs::File, hash::Hash, ops::AddAssign};
+use std::fs::File;
 
 use arrow::array::{AsArray, StringArray};
 use fancy_regex::Regex;

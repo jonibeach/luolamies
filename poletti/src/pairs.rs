@@ -1,5 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
+use pyo3::{FromPyObject, IntoPyObject};
+use pyo3_stub_gen::PyStubType;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::util::{Token, Word};
@@ -10,8 +12,16 @@ pub(crate) struct Count {
     pub(crate) idxs: FxHashSet<usize>,
 }
 
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Default, Clone, Copy)]
-pub(crate) struct TokenPair(Token, Token);
+#[derive(
+    Eq, Ord, PartialEq, PartialOrd, Hash, Default, Clone, Copy, FromPyObject, IntoPyObject,
+)]
+pub(crate) struct TokenPair(pub(crate) Token, pub(crate) Token);
+
+impl PyStubType for TokenPair {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        <(Token, Token) as PyStubType>::type_output()
+    }
+}
 
 impl TokenPair {
     fn new(word: &Word, i: usize) -> Self {
@@ -26,7 +36,7 @@ struct PairCounts<Log = ()> {
     log: Log,
 }
 
-trait Log: Default {
+pub(crate) trait Log: Default {
     fn record(&mut self, token_pair: TokenPair);
     fn drain(&mut self) -> impl IntoIterator<Item = TokenPair> + use<Self>;
 }
@@ -35,7 +45,7 @@ impl Log for () {
     fn drain(&mut self) -> impl IntoIterator<Item = TokenPair> + use<> {
         []
     }
-    fn record(&mut self, token_pair: TokenPair) {}
+    fn record(&mut self, _token_pair: TokenPair) {}
 }
 
 impl Log for FxHashSet<TokenPair> {
@@ -112,12 +122,12 @@ enum Mode {
 
 impl<'a> Pairs<'a, ()> {
     pub(crate) fn from_words(words: &'a mut [Word]) -> Self {
-        let counts = PairCounts::from_words(&words);
+        let counts = PairCounts::from_words(words);
 
         Self { counts, words }
     }
 
-    pub(crate) fn to_logged(self) -> Pairs<'a, FxHashSet<TokenPair>> {
+    pub(crate) fn into_logged(self) -> Pairs<'a, FxHashSet<TokenPair>> {
         Pairs {
             counts: self.counts.new_logger(),
             words: self.words,
@@ -162,7 +172,7 @@ impl<'a, L: Log> Pairs<'a, L> {
         }
     }
 
-    pub(crate) fn drain_log<'b>(&'b mut self) -> impl IntoIterator<Item = TokenPair> + use<L> {
+    pub(crate) fn drain_log(&mut self) -> impl IntoIterator<Item = TokenPair> + use<L> {
         self.counts.log.drain()
     }
 }

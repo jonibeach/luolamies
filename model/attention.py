@@ -1,8 +1,9 @@
 import torch
-from torch import nn
-from .utils import D_HEAD, D_MODEL, NUM_HEADS, HIDDEN_MUL, p, MLP, LayerNorm
-from .rope import RoPE
 import torch.nn.functional as F
+from torch import nn
+
+from .rope import RoPE
+from .utils import D_HEAD, D_MODEL, HIDDEN_MUL, MLP, NUM_HEADS, LayerNorm, p
 
 
 class Attn(nn.Module):

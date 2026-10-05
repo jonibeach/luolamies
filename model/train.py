@@ -1,13 +1,13 @@
-import numpy as np
-import torch
-from torch import nn
 import os
 from pathlib import Path
 
-from .utils import DEVICE
+import numpy as np
+import torch
+from torch import nn
+
 from .main import Model
 from .optimizer import AdamW
-
+from .utils import DEVICE
 
 BATCH_SIZE, CONTEXT_LEN = (2**7, 2**10) if DEVICE == "cuda" else (2**3, 2**8)
 NUM_MICROBATCHES = 2**2 if DEVICE == "cuda" else 1

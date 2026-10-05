@@ -1,7 +1,4 @@
 from .main import Model
-from .train import train
+from .train import restore_or_new, train
 
-__all__ = [
-    "Model",
-    "train",
-]
+__all__ = ["Model", "restore_or_new", "train"]

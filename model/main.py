@@ -1,8 +1,9 @@
-from bpe import VOCAB_SIZE
 from torch import nn
 
+from bpe import VOCAB_SIZE
+
 from .attention import AttnBlock
-from .utils import LayerNorm, Lin, D_MODEL, p, NUM_LAYERS
+from .utils import D_MODEL, NUM_LAYERS, LayerNorm, Lin, p
 
 
 class Model(nn.Module):
