@@ -1,3 +1,5 @@
+from torch.optim.lr_scheduler import LRScheduler
+from torch.optim.lr_scheduler import SequentialLR
 import os
 from pathlib import Path
 
@@ -8,6 +10,7 @@ from torch import nn
 from .main import Model
 from .optimizer import AdamW
 from .utils import DEVICE
+from .scheduler import Warmup, CosineDecay
 
 BATCH_SIZE, CONTEXT_LEN = (2**7, 2**10) if DEVICE == "cuda" else (2**3, 2**8)
 NUM_MICROBATCHES = 2**2 if DEVICE == "cuda" else 1
@@ -19,12 +22,13 @@ loss = nn.CrossEntropyLoss()
 CHECKPOINT_FILE = os.environ.get("CHECKPOINT_FILE", "checkpoint.pt")
 
 
-def checkpoint(m: Model, o: AdamW, epoch: int, batch: int):
+def checkpoint(m: Model, o: AdamW, sched: LRScheduler, epoch: int, batch: int):
     tmp = CHECKPOINT_FILE + ".tmp"
     torch.save(
         {
             "model": m.state_dict(),
             "optim": o.state_dict(),
+            "sched": sched.state_dict(),
             "epoch": epoch,
             "batch": batch,
         },
@@ -37,14 +41,19 @@ def restore_or_new(f: str = CHECKPOINT_FILE):
     p = Path(f)
     model = Model().to(DEVICE)
     optim = AdamW(model.parameters())
+    W = int(1e3)
+    warmup = Warmup(optim, W)
+    cosine = CosineDecay(optim, int(2e3))
+    sched = SequentialLR(optim, [warmup, cosine], [W])
 
     if not p.exists():
-        return (model, optim, 0, -1)
+        return (model, optim, sched, 0, -1)
 
     c = torch.load(f, map_location=DEVICE)
     model.load_state_dict(c["model"])
     optim.load_state_dict(c["optim"])
-    return (model, optim, int(c["epoch"]), int(c["batch"]))
+    sched.load_state_dict(c["sched"])
+    return (model, optim, sched, int(c["epoch"]), int(c["batch"]))
 
 
 def run_microbatched(model: Model, batch: torch.Tensor):
@@ -75,7 +84,7 @@ def train(corpus: np.ndarray, epochs=5):
         dataset[val_end:, ...],
     )
 
-    (model, optim, initial_epoch, initial_batch) = restore_or_new()
+    (model, optim, sched, initial_epoch, initial_batch) = restore_or_new()
 
     for e in range(initial_epoch, epochs):
         p = torch.randperm(TRAIN, device=DEVICE)
@@ -98,9 +107,10 @@ def train(corpus: np.ndarray, epochs=5):
             num_loss_batches += 1
 
             optim.step()
+            sched.step()
 
             if b % 100 == 0:
-                checkpoint(model, optim, e, b)
+                checkpoint(model, optim, sched, e, b)
                 with torch.no_grad():
                     val_loss = next(run_microbatched(model, val[:MICROBATCH]))
                     print(
@@ -117,6 +127,6 @@ def train(corpus: np.ndarray, epochs=5):
                 f"Epoch {e}, batch {b + 1}/{num_batches}, val_loss: {val_loss}",
             )
 
-    checkpoint(model, optim, epochs, 0)
+    checkpoint(model, optim, sched, epochs, 0)
 
     return model
