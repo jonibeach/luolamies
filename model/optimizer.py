@@ -8,7 +8,7 @@ class AdamW(Optimizer):
     def __init__(
         self,
         params: Iterable[torch.Tensor] | Iterable[dict[str, torch.Tensor]],
-        lr=1e-4,
+        lr=6e-4,
         weight_decay=2e-2,
         betas=(1 - 1e-1, 1 - 1e-3),
         eps=1e-8,
