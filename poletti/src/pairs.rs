@@ -1,4 +1,4 @@
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 
 use pyo3::{FromPyObject, IntoPyObject};
 use pyo3_stub_gen::PyStubType;
@@ -106,12 +106,6 @@ impl<'a, L: Log> Deref for Pairs<'a, L> {
     type Target = CountMap;
     fn deref(&self) -> &Self::Target {
         &self.counts.counts
-    }
-}
-
-impl<'a, L: Log> DerefMut for Pairs<'a, L> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.counts.counts
     }
 }
 

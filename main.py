@@ -12,7 +12,7 @@ from preprocess import preprocess
 
 
 class Mode(StrEnum):
-    Train = ("train",)
+    Train = "train"
     Run = "run"
 
 
@@ -22,8 +22,6 @@ modes = parser.add_subparsers(dest="mode", required=True)
 train = modes.add_parser(Mode.Train)
 run = modes.add_parser(Mode.Run)
 run.add_argument("input")
-
-parser.add_argument("mode", type=Mode, choices=list(Mode))
 
 
 def main():
@@ -46,11 +44,14 @@ def main():
     if mode == Mode.Train:
         model.train(tokenized_corpus)
     else:
-        m, *_ = model.restore_or_new()
-        input = tokenizer.encode_text(args.input)
-        output = m(torch.from_numpy(input.astype(np.int32)))
-        output = tokenizer.decode(output.cpu().numpy())
-        print(output)
+        with torch.no_grad():
+            m, *_ = model.restore_or_new()
+            input = tokenizer.encode_text(args.input)
+            output = m(torch.from_numpy(input.astype(np.int32)))
+            top10 = torch.topk(output, 10, dim=-1).indices
+            top10 = top10[:, -1, :]
+            text = tokenizer.decode(top10.cpu().numpy().astype(np.uint16))
+            print(text)
 
 
 if __name__ == "__main__":
