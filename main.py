@@ -38,7 +38,6 @@ def main():
         tokenized_corpus = tokenizer.encode_corpus(corpus)
         np.save(corpus_path, tokenized_corpus)
 
-    print(len(tokenized_corpus))
     mode = Mode(args.mode)
 
     if mode == Mode.Train:

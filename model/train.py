@@ -47,6 +47,17 @@ def restore_or_new(f: str = CHECKPOINT_FILE):
     return (model, optim, int(c["epoch"]), int(c["batch"]))
 
 
+def run_microbatched(model: Model, batch: torch.Tensor):
+    batches = batch.split(MICROBATCH)
+    for mb in batches:
+        x, y = mb[:, :-1], mb[:, 1:]
+        with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+            logits: torch.Tensor = model(x)  # B, T, V
+            yield (
+                loss(logits.flatten(0, 1), y.flatten().long()) / len(batches)
+            )  # B*T, V, and BT
+
+
 def train(corpus: np.ndarray, epochs=5):
     dataset = torch.from_numpy(corpus.astype(np.int32)).to(DEVICE)
     (L,) = dataset.shape
@@ -54,12 +65,25 @@ def train(corpus: np.ndarray, epochs=5):
     dataset = dataset[: L - overflow].reshape(-1, CONTEXT_LEN + 1)
     (N, _) = dataset.shape
 
+    test_val_size = int(N * 0.01)
+    TRAIN = N - 2 * test_val_size
+    val_end = N - test_val_size
+    _TEST, _VAL = test_val_size, test_val_size
+    train, val, _test = (
+        dataset[:TRAIN, ...],
+        dataset[TRAIN:val_end, ...],
+        dataset[val_end:, ...],
+    )
+
     (model, optim, initial_epoch, initial_batch) = restore_or_new()
 
     for e in range(initial_epoch, epochs):
-        p = torch.randperm(N, device=DEVICE)
-        batches = dataset[p].split(BATCH_SIZE)
+        p = torch.randperm(TRAIN, device=DEVICE)
+        batches = train[p].split(BATCH_SIZE)
         num_batches = len(batches)
+
+        total_train_loss = 0
+        num_loss_batches = 0
 
         for b, batch in enumerate(batches):
             if e == initial_epoch and b <= initial_batch:
@@ -67,23 +91,31 @@ def train(corpus: np.ndarray, epochs=5):
 
             optim.zero_grad()
 
-            for mb in batch.split(MICROBATCH):
-                x, y = mb[:, :-1], mb[:, 1:]
-                with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-                    logits: torch.Tensor = model(x)  # B, T, V
-                    l = (
-                        loss(logits.flatten(0, 1), y.flatten().long())
-                        / NUM_MICROBATCHES
-                    )  # B*T, V, and BT
+            for l in run_microbatched(model, batch):
+                total_train_loss += l.item()
                 l.backward()
+
+            num_loss_batches += 1
 
             optim.step()
 
             if b % 100 == 0:
                 checkpoint(model, optim, e, b)
-                print(
-                    f"Epoch {e}, batch {b + 1}/{num_batches}, loss {l.item() * NUM_MICROBATCHES}",
-                )
+                with torch.no_grad():
+                    val_loss = next(run_microbatched(model, val[:MICROBATCH]))
+                    print(
+                        f"Epoch {e}, batch {b + 1}/{num_batches}, avg_train_loss: {total_train_loss / num_loss_batches}, val_loss: {val_loss.item()}",
+                    )
+                    num_loss_batches = 0
+                    total_train_loss = 0
+
+        with torch.no_grad():
+            val_loss = 0
+            for mb_val_loss in run_microbatched(model, val):
+                val_loss += mb_val_loss.item()
+            print(
+                f"Epoch {e}, batch {b + 1}/{num_batches}, val_loss: {val_loss}",
+            )
 
     checkpoint(model, optim, epochs, 0)
 
