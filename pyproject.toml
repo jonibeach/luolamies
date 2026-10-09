@@ -11,11 +11,14 @@ dependencies = [
     "torch>=2.14.0",
     "poletti",
     "numpy>=2.5.3",
-    "skypilot>=0.13.0",
 ]
+
+[dependency-groups]
+launch = ["skypilot[verda]"]
 
 [tool.uv.sources]
 poletti = { path = "poletti" }
+skypilot = { git = "https://github.com/jonibeach/skypilot", branch = "verda" }
 
 
 [tool.pyrefly]

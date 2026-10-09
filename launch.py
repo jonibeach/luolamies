@@ -1,6 +1,5 @@
-#!/usr/bin/env -S uvx --from skypilot[gcp]==0.13.0 python
+#!/usr/bin/env -S uv run --group launch python
 import argparse
-import subprocess
 import sys
 from enum import StrEnum
 from pathlib import Path
@@ -10,8 +9,7 @@ import sky
 NAME = "luolamies"
 ROOT = Path(__file__).parent
 DATA_FILES = ["tokenizer.json", "corpus.npy", "wiki.parquet"]
-CHECKPOINT_BUCKET = "luolamies-checkpoints-505220"
-GCP_REGIONS = ["europe-west4", "europe-west1", "europe-west3"]
+VERDA_BUCKET = "luolamies-checkpoints"
 VERDA_GPUS = ["H100", "H200", "A100"]
 DISK_SIZE = 50
 
@@ -26,7 +24,7 @@ command -v cargo >/dev/null ||
 command -v uv >/dev/null ||
   curl -LsSf https://astral.sh/uv/install.sh | sh
 
-UV_PYTHON_PREFERENCE=only-managed uv sync
+UV_PYTHON_PREFERENCE=only-managed uv sync --frozen --no-group launch
 """
 
 RUN = f"""
@@ -34,7 +32,7 @@ set -euo pipefail
 {PATH}
 
 ln -sfn "$HOME/data" data
-UV_PYTHON_PREFERENCE=only-managed uv run main.py
+UV_PYTHON_PREFERENCE=only-managed uv run --frozen --no-group launch main.py
 """
 
 
@@ -46,32 +44,6 @@ def base_task():
         workdir=str(ROOT),
         file_mounts={f"~/data/{f}": str(ROOT / "data" / f) for f in DATA_FILES},
     )
-
-
-def gcp_task():
-    task = base_task()
-    task.set_resources(
-        [
-            sky.Resources(
-                infra=f"gcp/{region}",
-                accelerators="L4:1",
-                use_spot=True,
-                disk_size=DISK_SIZE,
-            )
-            for region in GCP_REGIONS
-        ]
-    )
-    task.update_envs({"CHECKPOINT_FILE": "/checkpoints/checkpoint.pt"})
-    task.set_storage_mounts(
-        {
-            "/checkpoints": sky.Storage(
-                name=CHECKPOINT_BUCKET,
-                stores=[sky.StoreType.GCS],
-                mode=sky.StorageMode.MOUNT_CACHED,
-            )
-        }
-    )
-    return task
 
 
 def verda_task():
@@ -87,49 +59,37 @@ def verda_task():
             for gpu in VERDA_GPUS
         ]
     )
+    task.update_envs({"CHECKPOINT_FILE": "/checkpoints/checkpoint.pt"})
+    task.set_storage_mounts(
+        {
+            "/checkpoints": sky.Storage(
+                source=f"verda://{VERDA_BUCKET}",
+                mode=sky.StorageMode.MOUNT_CACHED,
+            )
+        }
+    )
     return task
 
 
-def run(task: sky.Task, down: bool, dryrun: bool):
-    request = sky.launch(task, cluster_name=NAME, down=down, dryrun=dryrun)
-    job_id, _ = sky.stream_and_get(request)
-    if dryrun:
-        return None
-    return sky.tail_logs(NAME, job_id, follow=True)
+def dryrun(task: sky.Task):
+    sky.stream_and_get(sky.launch(task, cluster_name=NAME, down=True, dryrun=True))
 
 
-def fetch_checkpoint_and_down():
-    subprocess.run(
-        ["rsync", "-avz", f"{NAME}:sky_workdir/checkpoint.pt", str(ROOT / "data")],
-        check=True,
-    )
-    sky.stream_and_get(sky.down(NAME))
-
-
-class Cloud(StrEnum):
-    Verda = "verda"
-    GCP = "gcp"
+def run_job(task: sky.Task):
+    job_ids, _ = sky.stream_and_get(sky.jobs.launch(task, name=NAME))
+    return sky.jobs.tail_logs(job_id=job_ids[0], follow=True)
 
 
 parser = argparse.ArgumentParser()
-
-parser.add_argument("cloud", type=Cloud, choices=list(Cloud))
 parser.add_argument("--dryrun", action="store_true")
 
 
 def main():
     args = parser.parse_args()
-    cloud = args.cloud
-    dryrun = args.dryrun
-
-    if cloud == Cloud.GCP:
-        run(gcp_task(), down=True, dryrun=dryrun)
-    elif cloud == Cloud.Verda:
-        exit_code = run(verda_task(), down=False, dryrun=dryrun)
-        if exit_code == 0:
-            fetch_checkpoint_and_down()
+    if args.dryrun:
+        dryrun(verda_task())
     else:
-        sys.exit("usage: launch.py gcp|verda [--dryrun]")
+        sys.exit(run_job(verda_task()))
 
 
 if __name__ == "__main__":

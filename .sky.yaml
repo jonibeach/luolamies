@@ -1,0 +1,10 @@
+jobs:
+  bucket: verda://luolamies-checkpoints/jobs
+  controller:
+    resources:
+      infra: verda
+      cpus: 4
+      memory: 16
+      autostop:
+        idle_minutes: 10
+        down: true

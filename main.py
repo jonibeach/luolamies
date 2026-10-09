@@ -50,7 +50,7 @@ def main():
             output = m(torch.from_numpy(input.astype(np.int32)))
             top10 = torch.topk(output, 10, dim=-1).indices
             top10 = top10[:, -1, :]
-            text = tokenizer.decode(top10.cpu().numpy().astype(np.uint16))
+            text = tokenizer.decode(top10[None].cpu().numpy().astype(np.uint16))
             print(text)
 
 
